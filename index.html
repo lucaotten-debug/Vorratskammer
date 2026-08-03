@@ -17,7 +17,7 @@
 <body>
 <div id="root"></div>
 
-<script type="text/babel" data-presets="react">
+<script type="text/plain" id="app-source">
 const { useState, useEffect } = React;
 
 /* ---------- Eindeutige ID-Generierung ---------- */
@@ -600,5 +600,13 @@ function VorratsApp() {
 
 ReactDOM.createRoot(document.getElementById('root')).render(<VorratsApp />);
 </script>
+  <script>
+      var __src = document.getElementById('app-source').textContent;
+      var __out = Babel.transform(__src, { presets: [["react", { runtime: "classic" }]] }).code;
+      var __s = document.createElement('script');
+      __s.text = __out;
+      document.body.appendChild(__s);
+  </script>
+  </script>
 </body>
 </html>
