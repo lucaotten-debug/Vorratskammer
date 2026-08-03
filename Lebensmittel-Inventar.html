@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Vorrat &amp; Einkauf</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&display=swap');
+  .font-display { font-family: 'Manrope', ui-sans-serif, system-ui, sans-serif; }
+  body { font-family: ui-sans-serif, system-ui, sans-serif; background:#fafaf9; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect } = React;
+
+/* ---------- hand-rolled icons (no external icon package needed) ---------- */
+function Svg({ className, children }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+         strokeLinecap="round" strokeLinejoin="round" className={className}>
+      {children}
+    </svg>
+  );
+}
+const Package = ({ className }) => (
+  <Svg className={className}><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/></Svg>
+);
+const Milk = ({ className }) => (
+  <Svg className={className}><path d="M8 2h8v4l2 3v11a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V9l2-3V2z"/><path d="M6 13h12"/></Svg>
+);
+const Snowflake = ({ className }) => (
+  <Svg className={className}><path d="M12 2v20"/><path d="M4 6l16 12"/><path d="M20 6L4 18"/><path d="M2 12h20"/></Svg>
+);
+const Apple = ({ className }) => (
+  <Svg className={className}><path d="M12 6c-2-3-6-3-7 0-1.5 4 1 10 5 12 1 .5 3 .5 4 0 4-2 6.5-8 5-12-1-3-5-3-7 0z"/><path d="M12 6c0-1.5 1-3 3-3"/></Svg>
+);
+const ShoppingCart = ({ className }) => (
+  <Svg className={className}><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></Svg>
+);
+const Plus = ({ className }) => (<Svg className={className}><path d="M12 5v14"/><path d="M5 12h14"/></Svg>);
+const Minus = ({ className }) => (<Svg className={className}><path d="M5 12h14"/></Svg>);
+const Pencil = ({ className }) => (
+  <Svg className={className}><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></Svg>
+);
+const Trash2 = ({ className }) => (
+  <Svg className={className}><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></Svg>
+);
+const Check = ({ className }) => (<Svg className={className}><path d="M20 6 9 17l-5-5"/></Svg>);
+const X = ({ className }) => (<Svg className={className}><path d="M18 6 6 18"/><path d="M6 6l12 12"/></Svg>);
+const AlertTriangle = ({ className }) => (
+  <Svg className={className}><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></Svg>
+);
+const CheckCircle2 = ({ className }) => (
+  <Svg className={className}><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></Svg>
+);
+const Search = ({ className }) => (
+  <Svg className={className}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></Svg>
+);
+const ChevronDown = ({ className }) => (<Svg className={className}><path d="m6 9 6 6 6-6"/></Svg>);
+const ChevronLeft = ({ className }) => (<Svg className={className}><path d="m15 18-6-6 6-6"/></Svg>);
+const Home = ({ className }) => (
+  <Svg className={className}><path d="M3 9.5 12 3l9 6.5"/><path d="M5 10v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V10"/></Svg>
+);
+
+/* ---------- id generator ---------- */
+let idCounter = 0;
+const uid = () => `item-${idCounter++}`;
+const mk = (name, category, qty, min) => ({
+  id: uid(), name, category, qty, min, flagged: false, checked: false,
+});
+
+/* ---------- seed inventory (from current stock-take) ---------- */
+const SEED_ITEMS = [
+  // Vorratsschrank
+  mk('Basmati Reis', 'pantry', 2, 1),
+  mk('Risotto-Reis (Trüffel)', 'pantry', 1, 1),
+  mk('Bio Dinkel Penne', 'pantry', 1, 1),
+  mk('Bio Vollkorn Spaghetti', 'pantry', 1, 1),
+  mk('Capellini', 'pantry', 1, 1),
+  mk('Fusilli / Torsades', 'pantry', 1, 1),
+  mk('Lasagne-Platten', 'pantry', 1, 1),
+  mk('Ramen Noodles', 'pantry', 1, 1),
+  mk('Mie Noodles', 'pantry', 1, 1),
+  mk('Rote Linsen', 'pantry', 1, 1),
+  mk('Quinoa', 'pantry', 1, 1),
+  mk('Haferflocken', 'pantry', 1, 1),
+  mk('Weizenmehl', 'pantry', 1, 1),
+  mk('Paniermehl / Semmelbrösel', 'pantry', 1, 1),
+  mk('Speisestärke', 'pantry', 1, 1),
+  mk('Soßenbinder', 'pantry', 1, 1),
+  mk('Kaffee', 'pantry', 1, 1),
+  mk('Passierte Tomaten', 'pantry', 3, 1),
+  mk('Tomaten gehackt', 'pantry', 1, 1),
+  mk('Kichererbsen (Dose)', 'pantry', 1, 1),
+  mk('Kidneybohnen', 'pantry', 1, 1),
+  mk('Sonnenmais', 'pantry', 1, 1),
+  mk('Rotkohl (Glas)', 'pantry', 1, 1),
+  mk('Champignons (Glas)', 'pantry', 1, 1),
+  mk('Mandarin-Orangen (Dose)', 'pantry', 2, 1),
+  mk('Thunfisch Filets', 'pantry', 2, 1),
+  mk('Kartoffeln', 'pantry', 1, 1),
+  mk('Rote Currypaste', 'pantry', 1, 1),
+  mk('Pesto Basilico & Pistacchio', 'pantry', 1, 1),
+  mk('Kokosmilch', 'pantry', 1, 1),
+  mk('Olivenöl', 'pantry', 1, 1),
+  mk('Sojasauce', 'pantry', 1, 1),
+  mk('Essig', 'pantry', 1, 1),
+  mk('Gewürze Basis-Set', 'pantry', 1, 1),
+  mk('Gemüsebrühe', 'pantry', 1, 1),
+  mk('Hefeflocken', 'pantry', 1, 1),
+  mk('Nüsse & Saaten', 'pantry', 1, 1),
+  mk('Erdnussbutter', 'pantry', 1, 1),
+
+  // Kühlschrank
+  mk('Maasdamer Käse', 'fridge', 1, 1),
+  mk('Gouda gerieben', 'fridge', 1, 1),
+  mk('Fettarmer Joghurt', 'fridge', 1, 1),
+  mk('Herta Schinken', 'fridge', 1, 1),
+  mk('Tahina', 'fridge', 1, 1),
+  mk('Getrocknete Tomate & Feta-Aufstrich', 'fridge', 1, 1),
+  mk('Tomaten-Sahne-Sauce', 'fridge', 1, 1),
+  mk('Champignons frisch', 'fridge', 1, 1),
+  mk('Tofu geräuchert', 'fridge', 1, 1),
+  mk('Heidelbeeren', 'fridge', 1, 1),
+  mk('Himbeeren', 'fridge', 1, 1),
+  mk('Tortelloni Spinat-Ricotta', 'fridge', 1, 1),
+  mk('Milch / Pflanzendrink', 'fridge', 0, 1),
+  mk('Naturjoghurt', 'fridge', 0, 1),
+
+  // Tiefkühltruhe
+  mk('Rosenkohl', 'freezer', 1, 1),
+  mk('Junge Erbsen', 'freezer', 1, 1),
+  mk('King Prawns Garnelen', 'freezer', 1, 1),
+  mk('Eiswürfel', 'freezer', 1, 1),
+  mk('TK-Blattspinat', 'freezer', 1, 1),
+  mk('TK-Brokkoli', 'freezer', 1, 1),
+  mk('TK-Beeren', 'freezer', 1, 1),
+
+  // Frisches
+  mk('Zucchini', 'fresh', 1, 1),
+  mk('Karotten', 'fresh', 1, 1),
+  mk('Roter Paprika', 'fresh', 1, 1),
+  mk('Tomaten (Strauch)', 'fresh', 1, 1),
+  mk('Zitrone', 'fresh', 1, 1),
+  mk('Radieschen', 'fresh', 1, 1),
+  mk('Nektarinen', 'fresh', 1, 1),
+  mk('Bananen', 'fresh', 2, 1),
+  mk('Plattpfirsiche', 'fresh', 1, 1),
+  mk('Brot', 'fresh', 1, 1),
+  mk('Knuspermüsli', 'fresh', 1, 1),
+  mk('Frischer Spinat', 'fresh', 0, 1),
+  mk('Süßkartoffeln', 'fresh', 0, 1),
+  mk('Avocado', 'fresh', 0, 1),
+  mk('Zwiebeln', 'fresh', 1, 1),
+  mk('Knoblauch', 'fresh', 1, 1),
+];
+
+const CATEGORY_META = {
+  pantry:  { label: 'Vorratsschrank', icon: Package,   header: 'bg-amber-600' },
+  fridge:  { label: 'Kühlschrank',    icon: Milk,      header: 'bg-sky-600' },
+  freezer: { label: 'Tiefkühltruhe',  icon: Snowflake, header: 'bg-cyan-700' },
+  fresh:   { label: 'Frisches',       icon: Apple,     header: 'bg-emerald-600' },
+};
+const CATEGORY_KEYS = ['pantry', 'fridge', 'freezer', 'fresh'];
+const STORAGE_KEY = 'vorrat-app-state-v1';
+
+/* ---------- shared small pieces ---------- */
+function QtyStepper({ qty, onChange }) {
+  return (
+    <div className="flex items-center gap-1">
+      <button onClick={() => onChange(-1)}
+        className="w-7 h-7 flex items-center justify-center rounded-lg bg-stone-100 hover:bg-stone-200 active:scale-95 text-stone-600 transition"
+        aria-label="Menge verringern">
+        <Minus className="w-3.5 h-3.5" />
+      </button>
+      <span className="w-6 text-center text-sm font-bold tabular-nums text-stone-800">{qty}</span>
+      <button onClick={() => onChange(1)}
+        className="w-7 h-7 flex items-center justify-center rounded-lg bg-stone-100 hover:bg-stone-200 active:scale-95 text-stone-600 transition"
+        aria-label="Menge erhöhen">
+        <Plus className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+}
+
+function ItemRow({ item, onQty, onRename, onCategory, onMin, onDelete, onFlag }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(item.name);
+  useEffect(() => { setDraft(item.name); }, [item.name]);
+
+  const status = item.qty === 0 ? 'empty' : item.qty <= item.min ? 'low' : 'ok';
+  const dot = status === 'empty' ? 'bg-red-500' : status === 'low' ? 'bg-amber-500' : 'bg-stone-300';
+
+  return (
+    <div className="bg-white">
+      <div className="flex items-center gap-2.5 px-3.5 py-2.5">
+        <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${dot}`} />
+        <span className={`flex-1 text-sm truncate ${status === 'empty' ? 'text-red-700 font-semibold' : 'text-stone-800 font-medium'}`}>
+          {item.name}
+        </span>
+        <QtyStepper qty={item.qty} onChange={(d) => onQty(item.id, d)} />
+        <button onClick={() => onFlag(item.id)} title="Manuell auf Einkaufsliste setzen"
+          className={`w-7 h-7 flex items-center justify-center rounded-lg transition ${item.flagged ? 'bg-indigo-600 text-white' : 'bg-stone-100 text-stone-400 hover:bg-stone-200'}`}>
+          <ShoppingCart className="w-3.5 h-3.5" />
+        </button>
+        <button onClick={() => setEditing((e) => !e)}
+          className="w-7 h-7 flex items-center justify-center rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-500">
+          {editing ? <ChevronDown className="w-3.5 h-3.5" /> : <Pencil className="w-3.5 h-3.5" />}
+        </button>
+      </div>
+
+      {editing && (
+        <div className="px-3.5 pb-3 pt-1 bg-stone-50 border-t border-stone-100 flex flex-wrap items-center gap-2">
+          <input value={draft} onChange={(e) => setDraft(e.target.value)}
+            onBlur={() => onRename(item.id, draft.trim() || item.name)}
+            className="text-sm px-2 py-1.5 rounded-lg border border-stone-300 flex-1 min-w-[120px] focus:outline-none focus:ring-2 focus:ring-stone-300" />
+          <select value={item.category} onChange={(e) => onCategory(item.id, e.target.value)}
+            className="text-sm px-2 py-1.5 rounded-lg border border-stone-300 bg-white">
+            {CATEGORY_KEYS.map((k) => (<option key={k} value={k}>{CATEGORY_META[k].label}</option>))}
+          </select>
+          <label className="text-xs text-stone-500 flex items-center gap-1.5">
+            Mindestbestand
+            <input type="number" min="0" value={item.min}
+              onChange={(e) => onMin(item.id, Math.max(0, Number(e.target.value)))}
+              className="w-14 text-sm px-1.5 py-1 rounded-lg border border-stone-300" />
+          </label>
+          <button onClick={() => onDelete(item.id)}
+            className="ml-auto w-7 h-7 flex items-center justify-center rounded-lg bg-red-50 text-red-500 hover:bg-red-100">
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AddItemRow({ category, onAdd }) {
+  const [val, setVal] = useState('');
+  function submit() { if (val.trim()) { onAdd(val.trim(), category); setVal(''); } }
+  return (
+    <div className="flex items-center gap-2 px-3.5 py-2.5 bg-white">
+      <Plus className="w-4 h-4 text-stone-300 flex-shrink-0" />
+      <input value={val} onChange={(e) => setVal(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
+        placeholder="Neues Item hinzufügen…"
+        className="flex-1 text-sm px-2.5 py-1.5 rounded-lg border border-stone-200 focus:outline-none focus:ring-2 focus:ring-stone-300" />
+      <button onClick={submit}
+        className="text-sm font-semibold px-3 py-1.5 rounded-lg bg-stone-800 text-white hover:bg-stone-700 active:scale-95 transition">
+        Add
+      </button>
+    </div>
+  );
+}
+
+function StatTile({ label, value, tone }) {
+  const toneClasses = tone === 'alert' ? 'border-red-200 bg-red-50 text-red-600'
+    : tone === 'good' ? 'border-emerald-200 bg-emerald-50 text-emerald-600'
+    : 'border-stone-200 bg-white text-stone-800';
+  return (
+    <div className={`rounded-xl border p-3 text-center ${toneClasses}`}>
+      <p className="font-display text-2xl font-extrabold leading-none">{value}</p>
+      <p className="text-[11px] font-semibold mt-1 text-stone-500">{label}</p>
+    </div>
+  );
+}
+
+/* ---------- Dashboard (own page) ---------- */
+function DashboardTab({ items, onJump }) {
+  const alertItems = items.filter((it) => it.qty <= it.min || it.flagged);
+  const grouped = CATEGORY_KEYS
+    .map((k) => ({ key: k, list: alertItems.filter((it) => it.category === k) }))
+    .filter((g) => g.list.length > 0);
+
+  return (
+    <div>
+      <div className="grid grid-cols-3 gap-2.5 mb-5">
+        <StatTile label="Artikel gesamt" value={items.length} />
+        <StatTile label="Knapp / leer" value={alertItems.length} tone={alertItems.length > 0 ? 'alert' : 'good'} />
+        <StatTile label="Kategorien" value={4} />
+      </div>
+
+      {alertItems.length === 0 ? (
+        <div className="rounded-2xl border-2 border-emerald-300 bg-emerald-50 p-5 flex items-center gap-3">
+          <CheckCircle2 className="w-8 h-8 text-emerald-600 flex-shrink-0" />
+          <div>
+            <p className="font-display font-extrabold text-emerald-800">Alles vorhanden</p>
+            <p className="text-sm text-emerald-700">Kein Artikel ist aktuell knapp oder leer.</p>
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-2xl border-2 border-red-300 bg-red-50 p-4">
+          <div className="flex items-center gap-2 mb-3.5">
+            <AlertTriangle className="w-5 h-5 text-red-600" />
+            <h2 className="font-display font-extrabold text-red-800">Knapp oder leer — {alertItems.length} Artikel</h2>
+          </div>
+          <div className="space-y-3">
+            {grouped.map((g) => {
+              const meta = CATEGORY_META[g.key];
+              const Icon = meta.icon;
+              return (
+                <div key={g.key}>
+                  <button onClick={() => onJump(g.key)}
+                    className="flex items-center gap-1.5 mb-1.5 text-xs font-bold text-stone-500 uppercase tracking-wide hover:text-stone-800">
+                    <Icon className="w-3.5 h-3.5" /> {meta.label}
+                  </button>
+                  <div className="rounded-xl overflow-hidden border border-stone-200 divide-y divide-stone-100 bg-white">
+                    {g.list.map((it) => {
+                      const empty = it.qty === 0;
+                      return (
+                        <div key={it.id} className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+                          <span className="text-sm font-semibold text-stone-800 truncate">{it.name}</span>
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${empty ? 'bg-red-600 text-white' : 'bg-amber-100 text-amber-700'}`}>
+                            {empty ? 'Leer' : `${it.qty} / ${it.min}`}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------- Category page ---------- */
+function CategoryPage({ catKey, items, handlers, onBack }) {
+  const [search, setSearch] = useState('');
+  const meta = CATEGORY_META[catKey];
+  const Icon = meta.icon;
+  const catItems = items.filter((it) => it.category === catKey && it.name.toLowerCase().includes(search.toLowerCase()));
+
+  return (
+    <div>
+      <button onClick={onBack} className="inline-flex items-center gap-1.5 text-sm font-bold text-stone-500 hover:text-stone-800 mb-3">
+        <ChevronLeft className="w-4 h-4" /> Zur Startseite
+      </button>
+
+      <div className="rounded-xl overflow-hidden border border-stone-200 shadow-sm">
+        <div className={`flex items-center gap-2.5 px-4 py-3.5 ${meta.header}`}>
+          <Icon className="w-5 h-5 text-white" />
+          <h2 className="font-display text-white font-extrabold">{meta.label}</h2>
+          <span className="text-white/80 text-xs bg-white/20 px-2 py-0.5 rounded-full ml-1">{catItems.length}</span>
+        </div>
+        <div className="p-3 bg-stone-50 border-b border-stone-100">
+          <div className="relative">
+            <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)}
+              placeholder={`${meta.label} durchsuchen…`}
+              className="w-full pl-9 pr-3 py-2 rounded-xl border border-stone-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-stone-300" />
+          </div>
+        </div>
+        <div className="divide-y divide-stone-100">
+          {catItems.length === 0 && <p className="px-4 py-3 text-sm text-stone-400">Keine Treffer</p>}
+          {catItems.map((it) => (<ItemRow key={it.id} item={it} {...handlers} />))}
+          <AddItemRow category={catKey} onAdd={handlers.onAdd} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Shopping tab (grouped by category) ---------- */
+function ShoppingTab({ items, extra, onQty, onToggleChecked, onToggleExtraChecked, onRemoveExtra, onAddExtra, onComplete }) {
+  const [newName, setNewName] = useState('');
+  const [newCat, setNewCat] = useState('fresh');
+
+  const shoppingItems = items.filter((it) => it.qty <= it.min || it.flagged);
+  const grouped = CATEGORY_KEYS
+    .map((k) => ({ key: k, list: shoppingItems.filter((it) => it.category === k) }))
+    .filter((g) => g.list.length > 0);
+
+  const checkedCount = shoppingItems.filter((i) => i.checked).length + extra.filter((e) => e.checked).length;
+  const totalCount = shoppingItems.length + extra.length;
+
+  function submitExtra() { if (newName.trim()) { onAddExtra(newName.trim(), newCat); setNewName(''); } }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-display text-lg font-extrabold text-stone-900">Einkaufsliste</h2>
+        <button onClick={onComplete} disabled={checkedCount === 0}
+          className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold transition ${checkedCount === 0 ? 'bg-stone-100 text-stone-400' : 'bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95'}`}>
+          <Check className="w-4 h-4" /> Abschließen ({checkedCount})
+        </button>
+      </div>
+
+      {totalCount === 0 ? (
+        <div className="text-center py-14 text-stone-400">
+          <ShoppingCart className="w-10 h-10 mx-auto mb-2 opacity-40" />
+          <p className="text-sm">Einkaufsliste ist leer — alles vorhanden.</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {grouped.map((g) => {
+            const meta = CATEGORY_META[g.key];
+            const Icon = meta.icon;
+            return (
+              <div key={g.key}>
+                <div className="flex items-center gap-1.5 px-1 mb-1.5">
+                  <Icon className="w-3.5 h-3.5 text-stone-400" />
+                  <p className="text-xs font-bold text-stone-400 uppercase tracking-wide">{meta.label}</p>
+                </div>
+                <div className="rounded-xl border border-stone-200 overflow-hidden divide-y divide-stone-100 shadow-sm">
+                  {g.list.map((it) => (
+                    <div key={it.id} className="flex items-center gap-2.5 px-3.5 py-2.5 bg-white">
+                      <button onClick={() => onToggleChecked(it.id)}
+                        className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition ${it.checked ? 'bg-emerald-500 border-emerald-500' : 'border-stone-300'}`}>
+                        {it.checked && <Check className="w-3.5 h-3.5 text-white" />}
+                      </button>
+                      <span className={`flex-1 text-sm truncate ${it.checked ? 'line-through text-stone-400' : 'text-stone-800 font-medium'}`}>{it.name}</span>
+                      <span className="text-xs text-stone-400 hidden sm:inline">Min {it.min}</span>
+                      <QtyStepper qty={it.qty} onChange={(d) => onQty(it.id, d)} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+
+          {extra.length > 0 && (
+            <div>
+              <p className="text-xs font-bold text-stone-400 uppercase tracking-wide mb-1.5 px-1">Sonstiges</p>
+              <div className="rounded-xl border border-stone-200 overflow-hidden divide-y divide-stone-100 shadow-sm">
+                {extra.map((e) => (
+                  <div key={e.id} className="flex items-center gap-2.5 px-3.5 py-2.5 bg-white">
+                    <button onClick={() => onToggleExtraChecked(e.id)}
+                      className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition ${e.checked ? 'bg-emerald-500 border-emerald-500' : 'border-stone-300'}`}>
+                      {e.checked && <Check className="w-3.5 h-3.5 text-white" />}
+                    </button>
+                    <span className={`flex-1 text-sm truncate ${e.checked ? 'line-through text-stone-400' : 'text-stone-800 font-medium'}`}>{e.name}</span>
+                    <button onClick={() => onRemoveExtra(e.id)}
+                      className="w-6 h-6 flex items-center justify-center rounded text-stone-300 hover:text-red-500">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <input value={newName} onChange={(e) => setNewName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') submitExtra(); }}
+          placeholder="Neues Item zur Einkaufsliste…"
+          className="flex-1 min-w-[160px] text-sm px-3 py-2 rounded-lg border border-stone-300 focus:outline-none focus:ring-2 focus:ring-stone-300" />
+        <select value={newCat} onChange={(e) => setNewCat(e.target.value)}
+          className="text-sm px-2 py-2 rounded-lg border border-stone-300 bg-white">
+          {CATEGORY_KEYS.map((k) => (<option key={k} value={k}>{CATEGORY_META[k].label}</option>))}
+        </select>
+        <button onClick={submitExtra}
+          className="text-sm font-semibold px-3 py-2 rounded-lg bg-stone-800 text-white hover:bg-stone-700 active:scale-95 transition">
+          Hinzufügen
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Main App ---------- */
+const NAV_ITEMS = [
+  { key: 'dashboard', label: 'Dashboard', icon: Home },
+  { key: 'pantry', label: 'Vorrat', icon: Package },
+  { key: 'fridge', label: 'Kühlschrank', icon: Milk },
+  { key: 'freezer', label: 'TK', icon: Snowflake },
+  { key: 'fresh', label: 'Frisches', icon: Apple },
+  { key: 'shopping', label: 'Einkauf', icon: ShoppingCart },
+];
+
+function VorratsApp() {
+  const [items, setItems] = useState(SEED_ITEMS);
+  const [extra, setExtra] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const [tab, setTab] = useState('dashboard');
+
+  // load persisted state once (localStorage — this runs as a real local file in your browser)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed.items) && parsed.items.length) setItems(parsed.items);
+        if (Array.isArray(parsed.extra)) setExtra(parsed.extra);
+      }
+    } catch (err) {
+      // no saved state yet — keep seed defaults
+    }
+    setLoaded(true);
+  }, []);
+
+  // persist on every change
+  useEffect(() => {
+    if (!loaded) return;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ items, extra }));
+    } catch (err) {}
+  }, [items, extra, loaded]);
+
+  const updateQty = (id, delta) =>
+    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, qty: Math.max(0, it.qty + delta) } : it)));
+  const renameItem = (id, name) =>
+    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, name } : it)));
+  const changeCategory = (id, category) =>
+    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, category } : it)));
+  const setMin = (id, min) =>
+    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, min } : it)));
+  const deleteItem = (id) => setItems((prev) => prev.filter((it) => it.id !== id));
+  const toggleFlag = (id) =>
+    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, flagged: !it.flagged } : it)));
+  const toggleChecked = (id) =>
+    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, checked: !it.checked } : it)));
+  const addItem = (name, category) =>
+    setItems((prev) => [...prev, { id: uid(), name, category, qty: 1, min: 1, flagged: false, checked: false }]);
+
+  const addExtra = (name, category) =>
+    setExtra((prev) => [...prev, { id: uid(), name, category, checked: false }]);
+  const toggleExtraChecked = (id) =>
+    setExtra((prev) => prev.map((e) => (e.id === id ? { ...e, checked: !e.checked } : e)));
+  const removeExtra = (id) => setExtra((prev) => prev.filter((e) => e.id !== id));
+
+  const completeShopping = () => {
+    const boughtExtras = extra.filter((e) => e.checked);
+    setItems((prev) => {
+      const updated = prev.map((it) => {
+        if (!it.checked) return it;
+        const newQty = it.qty <= it.min ? it.min + 1 : it.qty;
+        return { ...it, qty: newQty, checked: false, flagged: false };
+      });
+      const added = boughtExtras.map((e) => ({
+        id: uid(), name: e.name, category: e.category, qty: 1, min: 1, flagged: false, checked: false,
+      }));
+      return [...updated, ...added];
+    });
+    setExtra((prev) => prev.filter((e) => !e.checked));
+  };
+
+  const shoppingBadgeCount =
+    items.filter((it) => (it.qty <= it.min || it.flagged) && !it.checked).length +
+    extra.filter((e) => !e.checked).length;
+
+  if (!loaded) {
+    return <div className="min-h-screen flex items-center justify-center bg-stone-50 text-stone-400 text-sm">Lade Inventar…</div>;
+  }
+
+  const handlers = {
+    onQty: updateQty, onRename: renameItem, onCategory: changeCategory,
+    onMin: setMin, onDelete: deleteItem, onFlag: toggleFlag, onAdd: addItem,
+  };
+
+  return (
+    <div className="min-h-screen bg-stone-50 pb-16">
+      <div className="max-w-3xl mx-auto px-4 pt-6 pb-3">
+        <h1 className="font-display text-2xl font-extrabold text-stone-900 tracking-tight">Vorrat &amp; Einkauf</h1>
+        <p className="text-sm text-stone-500 mb-4">Private Bestandsverwaltung</p>
+
+        <div className="overflow-x-auto -mx-4 px-4">
+          <div className="flex gap-2 w-max pb-1">
+            {NAV_ITEMS.map(({ key, label, icon: Icon }) => {
+              const active = tab === key;
+              return (
+                <button key={key} onClick={() => setTab(key)}
+                  className={`relative inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition ${active ? 'bg-stone-900 text-white' : 'bg-white text-stone-600 border border-stone-200 hover:border-stone-400'}`}>
+                  <Icon className="w-4 h-4" />
+                  {label}
+                  {key === 'shopping' && shoppingBadgeCount > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-bold min-w-[18px] h-[18px] rounded-full flex items-center justify-center px-1">
+                      {shoppingBadgeCount}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-3xl mx-auto px-4 pt-2">
+        {tab === 'dashboard' && <DashboardTab items={items} onJump={(k) => setTab(k)} />}
+        {CATEGORY_KEYS.includes(tab) && (
+          <CategoryPage catKey={tab} items={items} handlers={handlers} onBack={() => setTab('dashboard')} />
+        )}
+        {tab === 'shopping' && (
+          <ShoppingTab
+            items={items} extra={extra}
+            onQty={updateQty}
+            onToggleChecked={toggleChecked}
+            onToggleExtraChecked={toggleExtraChecked}
+            onRemoveExtra={removeExtra}
+            onAddExtra={addExtra}
+            onComplete={completeShopping}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<VorratsApp />);
+</script>
+</body>
+</html>
