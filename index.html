@@ -83,9 +83,12 @@ const Home = ({ className }) => (
 const Copy = ({ className }) => (
   <Svg className={className}><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></Svg>
 );
+const HalfCircle = ({ className }) => (
+  <Svg className={className}><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></Svg>
+);
 
 const mk = (name, category, qty, min) => ({
-  id: uid(), name, category, qty, min, flagged: false, checked: false,
+  id: uid(), name, category, qty, min, flagged: false, checked: false, autoRestock: true, opened: false,
 });
 
 /* ---------- Seed Inventory ---------- */
@@ -203,7 +206,7 @@ function QtyStepper({ qty, onChange }) {
   );
 }
 
-function ItemRow({ item, onQty, onRename, onCategory, onMin, onDelete, onFlag }) {
+function ItemRow({ item, onQty, onRename, onCategory, onMin, onDelete, onFlag, onToggleOpened, onAutoRestock }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(item.name);
   useEffect(() => { setDraft(item.name); }, [item.name]);
@@ -215,16 +218,25 @@ function ItemRow({ item, onQty, onRename, onCategory, onMin, onDelete, onFlag })
     <div className="bg-white">
       <div className="flex items-center gap-2.5 px-3.5 py-2.5">
         <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${dot}`} />
-        <span className={`flex-1 text-sm truncate ${status === 'empty' ? 'text-red-700 font-semibold' : 'text-stone-800 font-medium'}`}>
+        <span className={`flex-1 min-w-0 text-sm truncate ${status === 'empty' ? 'text-red-700 font-semibold' : 'text-stone-800 font-medium'}`}>
           {item.name}
+          {item.opened && (
+            <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 align-middle whitespace-nowrap">
+              angebrochen
+            </span>
+          )}
         </span>
         <QtyStepper qty={item.qty} onChange={(d) => onQty(item.id, d)} />
+        <button onClick={() => onToggleOpened(item.id)} title="Als angebrochen markieren"
+          className={`w-7 h-7 flex items-center justify-center rounded-lg transition flex-shrink-0 ${item.opened ? 'bg-amber-500 text-white' : 'bg-stone-100 text-stone-400 hover:bg-stone-200'}`}>
+          <HalfCircle className="w-3.5 h-3.5" />
+        </button>
         <button onClick={() => onFlag(item.id)} title="Manuell auf Einkaufsliste setzen"
-          className={`w-7 h-7 flex items-center justify-center rounded-lg transition ${item.flagged ? 'bg-indigo-600 text-white' : 'bg-stone-100 text-stone-400 hover:bg-stone-200'}`}>
+          className={`w-7 h-7 flex items-center justify-center rounded-lg transition flex-shrink-0 ${item.flagged ? 'bg-indigo-600 text-white' : 'bg-stone-100 text-stone-400 hover:bg-stone-200'}`}>
           <ShoppingCart className="w-3.5 h-3.5" />
         </button>
         <button onClick={() => setEditing((e) => !e)}
-          className="w-7 h-7 flex items-center justify-center rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-500">
+          className="w-7 h-7 flex items-center justify-center rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-500 flex-shrink-0">
           {editing ? <ChevronDown className="w-3.5 h-3.5" /> : <Pencil className="w-3.5 h-3.5" />}
         </button>
       </div>
@@ -243,6 +255,12 @@ function ItemRow({ item, onQty, onRename, onCategory, onMin, onDelete, onFlag })
             <input type="number" min="0" value={item.min}
               onChange={(e) => onMin(item.id, Math.max(0, Number(e.target.value)))}
               className="w-14 text-sm px-1.5 py-1 rounded-lg border border-stone-300" />
+          </label>
+          <label className="text-xs text-stone-500 flex items-center gap-1.5">
+            <input type="checkbox" checked={item.autoRestock !== false}
+              onChange={(e) => onAutoRestock(item.id, e.target.checked)}
+              className="rounded border-stone-300" />
+            Automatisch auf Einkaufsliste
           </label>
           <button onClick={() => onDelete(item.id)}
             className="ml-auto w-7 h-7 flex items-center justify-center rounded-lg bg-red-50 text-red-500 hover:bg-red-100">
@@ -350,7 +368,7 @@ function InStockSection({ items }) {
 }
 
 function DashboardTab({ items, onJump }) {
-  const alertItems = items.filter((it) => it.qty <= it.min || it.flagged);
+  const alertItems = items.filter((it) => (it.qty <= it.min && it.autoRestock !== false) || it.flagged);
   const grouped = CATEGORY_KEYS
     .map((k) => ({ key: k, list: alertItems.filter((it) => it.category === k) }))
     .filter((g) => g.list.length > 0);
@@ -452,7 +470,7 @@ function ShoppingTab({ items, extra, onQty, onToggleChecked, onToggleExtraChecke
   const [newName, setNewName] = useState('');
   const [newCat, setNewCat] = useState('fresh');
 
-  const trackedLow = items.filter((it) => it.qty <= it.min || it.flagged);
+  const trackedLow = items.filter((it) => (it.qty <= it.min && it.autoRestock !== false) || it.flagged);
   const groups = SHOPPING_CATEGORY_KEYS
     .map((k) => ({
       key: k,
@@ -468,13 +486,16 @@ function ShoppingTab({ items, extra, onQty, onToggleChecked, onToggleExtraChecke
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-1.5">
         <h2 className="font-display text-lg font-extrabold text-stone-900">Einkaufsliste</h2>
         <button onClick={onComplete} disabled={checkedCount === 0}
           className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold transition ${checkedCount === 0 ? 'bg-stone-100 text-stone-400' : 'bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95'}`}>
           <Check className="w-4 h-4" /> Abschließen ({checkedCount})
         </button>
       </div>
+      {totalCount > 0 && (
+        <p className="text-xs text-stone-400 mb-4">{checkedCount} von {totalCount} im Warenkorb</p>
+      )}
 
       {totalCount === 0 ? (
         <div className="text-center py-14 text-stone-400">
@@ -587,10 +608,14 @@ function VorratsApp() {
   const deleteItem = (id) => setItems((prev) => prev.filter((it) => it.id !== id));
   const toggleFlag = (id) =>
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, flagged: !it.flagged } : it)));
+  const toggleOpened = (id) =>
+    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, opened: !it.opened } : it)));
+  const setAutoRestock = (id, autoRestock) =>
+    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, autoRestock } : it)));
   const toggleChecked = (id) =>
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, checked: !it.checked } : it)));
   const addItem = (name, category) =>
-    setItems((prev) => [...prev, { id: uid(), name, category, qty: 1, min: 0, flagged: false, checked: false }]);
+    setItems((prev) => [...prev, { id: uid(), name, category, qty: 1, min: 0, flagged: false, checked: false, autoRestock: true, opened: false }]);
 
   const addExtra = (name, category) =>
     setExtra((prev) => [...prev, { id: uid(), name, category, checked: false }]);
@@ -609,6 +634,7 @@ function VorratsApp() {
       });
       const added = trackedExtras.map((e) => ({
         id: uid(), name: e.name, category: e.category, qty: 1, min: 0, flagged: false, checked: false,
+        autoRestock: true, opened: false,
       }));
       return [...updated, ...added];
     });
@@ -616,7 +642,7 @@ function VorratsApp() {
   };
 
   const shoppingBadgeCount =
-    items.filter((it) => (it.qty <= it.min || it.flagged) && !it.checked).length +
+    items.filter((it) => ((it.qty <= it.min && it.autoRestock !== false) || it.flagged) && !it.checked).length +
     extra.filter((e) => !e.checked).length;
 
   if (!loaded) {
@@ -626,6 +652,7 @@ function VorratsApp() {
   const handlers = {
     onQty: updateQty, onRename: renameItem, onCategory: changeCategory,
     onMin: setMin, onDelete: deleteItem, onFlag: toggleFlag, onAdd: addItem,
+    onToggleOpened: toggleOpened, onAutoRestock: setAutoRestock,
   };
 
   return (
